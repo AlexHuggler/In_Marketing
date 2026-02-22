@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import Combine
 
 /// Main view model that orchestrates all influencer research functionality.
 @MainActor
@@ -45,22 +44,25 @@ class ResearchViewModel: ObservableObject {
 
     private let dataLoader = DataLoader()
     private var currentTask: Task<Void, Never>?
+    private var reportTask: Task<Void, Never>?
     private let favoritesKey = "com.inmarketing.favoriteCreatorIds"
 
     // MARK: - Init
 
     init() {
         loadFavorites()
+        restorePersistedData()
     }
 
     // MARK: - Load Sample Data
 
     func loadSampleData() {
-        // Cancel any in-flight task
+        // Cancel any in-flight tasks
         currentTask?.cancel()
+        reportTask?.cancel()
         isLoading = true
 
-        currentTask = Task.detached { [sampleSize] in
+        currentTask = Task.detached { [weak self, sampleSize] in
             let (samplePosts, sampleCreators) = SampleDataGenerator.generateSampleData(
                 numCreators: sampleSize,
                 postsPerCreator: 15,
@@ -69,15 +71,19 @@ class ResearchViewModel: ObservableObject {
 
             guard !Task.isCancelled else { return }
 
-            await MainActor.run { [self] in
+            await MainActor.run {
+                guard let self else { return }
                 self.posts = samplePosts
                 self.creators = sampleCreators
                 self.hasData = true
                 self.isLoading = false
                 self.rebuildAvailableNiches()
-                self.generateAllReports()
+                self.persistData()
                 Haptics.success()
             }
+
+            guard !Task.isCancelled else { return }
+            await self?.generateAllReportsAsync()
         }
     }
 
@@ -85,6 +91,7 @@ class ResearchViewModel: ObservableObject {
 
     func loadPostsCSV(content: String) {
         isLoading = true
+        dataLoader.loadErrors = []
         let newPosts = dataLoader.loadPostsFromCSV(content: content)
         posts.append(contentsOf: newPosts)
         finishDataLoad(importedCount: newPosts.count, type: "posts")
@@ -92,6 +99,7 @@ class ResearchViewModel: ObservableObject {
 
     func loadCreatorsCSV(content: String) {
         isLoading = true
+        dataLoader.loadErrors = []
         let newCreators = dataLoader.loadCreatorsFromCSV(content: content)
         for c in newCreators { creators[c.id] = c }
         finishDataLoad(importedCount: newCreators.count, type: "creators")
@@ -101,6 +109,7 @@ class ResearchViewModel: ObservableObject {
 
     func loadJSON(data: Data) {
         isLoading = true
+        dataLoader.loadErrors = []
         let (newPosts, newCreators) = dataLoader.loadFromJSON(content: data)
         posts.append(contentsOf: newPosts)
         for c in newCreators { creators[c.id] = c }
@@ -127,7 +136,8 @@ class ResearchViewModel: ObservableObject {
         hasData = !posts.isEmpty || !creators.isEmpty
         if hasData {
             rebuildAvailableNiches()
-            generateAllReports()
+            persistData()
+            generateAllReportsAsync()
         }
     }
 
@@ -139,40 +149,80 @@ class ResearchViewModel: ObservableObject {
         return dataLoader.exportToJSON()
     }
 
-    // MARK: - Report Generation
+    // MARK: - Report Generation (off main thread)
 
+    @discardableResult
+    func generateAllReportsAsync() -> Task<Void, Never> {
+        reportTask?.cancel()
+
+        let postsCopy = posts
+        let creatorsCopy = creators
+        let nichesCopy = targetNiches
+        let searchText = nicheSearchText
+        let method = rankingMethod
+        let platformFilter = selectedPlatformFilter
+
+        let task = Task.detached { [weak self] in
+            let generator = ReportGenerator(
+                posts: postsCopy, creators: creatorsCopy, targetNiches: nichesCopy
+            )
+
+            let summary = generator.generateExecutiveSummary()
+            guard !Task.isCancelled else { return }
+
+            let rankings = generator.generateCreatorRankings()
+            guard !Task.isCancelled else { return }
+
+            let ideas = generator.generateContentIdeas()
+            guard !Task.isCancelled else { return }
+
+            let collabs = generator.generateCollaborationTargets()
+            guard !Task.isCancelled else { return }
+
+            let trending = generator.generateTrendingReport()
+            guard !Task.isCancelled else { return }
+
+            let ws = WhitespaceAnalyzer(posts: postsCopy, creators: creatorsCopy)
+            let whitespace = ws.identifyWhitespaceOpportunities()
+            guard !Task.isCancelled else { return }
+
+            // Niche discovery
+            let niches = searchText.isEmpty ? nichesCopy :
+                searchText.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
+            let discovery = NicheDiscovery(creators: creatorsCopy, posts: postsCopy)
+            let nicheRanked = discovery.rankCreatorsInNiche(
+                niches: niches, rankingMethod: method,
+                platforms: platformFilter.map { [$0] }
+            )
+            let stars = discovery.findRisingStars(niches: niches)
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard let self else { return }
+                self.executiveSummary = summary
+                self.creatorRankings = rankings
+                self.contentIdeas = ideas
+                self.collaborationTargets = collabs
+                self.trendingReport = trending
+                self.whitespaceOpportunities = whitespace
+                self.nicheRankings = nicheRanked
+                self.risingStars = stars
+            }
+        }
+
+        reportTask = task
+        return task
+    }
+
+    /// Synchronous wrapper for backward compatibility (pull-to-refresh, settings changes).
     func generateAllReports() {
-        let generator = ReportGenerator(
-            posts: posts, creators: creators, targetNiches: targetNiches
-        )
-
-        executiveSummary = generator.generateExecutiveSummary()
-        creatorRankings = generator.generateCreatorRankings()
-        contentIdeas = generator.generateContentIdeas()
-        collaborationTargets = generator.generateCollaborationTargets()
-        trendingReport = generator.generateTrendingReport()
-
-        let ws = WhitespaceAnalyzer(posts: posts, creators: creators)
-        whitespaceOpportunities = ws.identifyWhitespaceOpportunities()
-
-        refreshNicheDiscovery()
+        generateAllReportsAsync()
     }
 
     // MARK: - Niche Discovery
 
     func refreshNicheDiscovery() {
-        let niches = nicheSearchText.isEmpty ? targetNiches :
-            nicheSearchText.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
-
-        let discovery = NicheDiscovery(creators: creators, posts: posts)
-
-        nicheRankings = discovery.rankCreatorsInNiche(
-            niches: niches,
-            rankingMethod: rankingMethod,
-            platforms: selectedPlatformFilter.map { [$0] }
-        )
-
-        risingStars = discovery.findRisingStars(niches: niches)
+        generateAllReportsAsync()
     }
 
     // MARK: - Update Niches
@@ -236,6 +286,27 @@ class ResearchViewModel: ObservableObject {
     private func loadFavorites() {
         if let saved = UserDefaults.standard.stringArray(forKey: favoritesKey) {
             favoritedCreatorIds = Set(saved)
+        }
+    }
+
+    // MARK: - Data Persistence (C-05 fix)
+
+    private func persistData() {
+        let postsCopy = posts
+        let creatorsCopy = creators
+        Task.detached {
+            try? DataPersistence.save(posts: postsCopy, creators: creatorsCopy)
+        }
+    }
+
+    private func restorePersistedData() {
+        guard let saved = DataPersistence.load() else { return }
+        posts = saved.posts
+        creators = saved.creators
+        hasData = !posts.isEmpty || !creators.isEmpty
+        if hasData {
+            rebuildAvailableNiches()
+            generateAllReportsAsync()
         }
     }
 

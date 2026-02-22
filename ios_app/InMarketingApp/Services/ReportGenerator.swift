@@ -6,25 +6,30 @@ struct ReportGenerator {
     let creators: [String: Creator]
     let targetNiches: [String]
 
-    private var engagementAnalyzer: EngagementAnalyzer {
-        EngagementAnalyzer(posts: posts, creators: creators)
-    }
-    private var trendAnalyzer: TrendAnalyzer {
-        var t = TrendAnalyzer(posts: posts)
-        t.engagementAnalyzer = engagementAnalyzer
-        return t
-    }
-    private var patternAnalyzer: ContentPatternAnalyzer {
-        ContentPatternAnalyzer(posts: posts)
-    }
-    private var whitespaceAnalyzer: WhitespaceAnalyzer {
-        WhitespaceAnalyzer(posts: posts, creators: creators)
-    }
-    private var qualityAnalyzer: EngagementQualityAnalyzer {
-        EngagementQualityAnalyzer(posts: posts)
-    }
-    private var collabAnalyzer: CollaborationAnalyzer? {
-        targetNiches.isEmpty ? nil : CollaborationAnalyzer(creators: creators, targetNiches: targetNiches)
+    // Analyzers created once at init — avoids repeated re-instantiation (C-04 fix)
+    private let engagementAnalyzer: EngagementAnalyzer
+    private let trendAnalyzer: TrendAnalyzer
+    private let patternAnalyzer: ContentPatternAnalyzer
+    private let whitespaceAnalyzer: WhitespaceAnalyzer
+    private let qualityAnalyzer: EngagementQualityAnalyzer
+    private let collabAnalyzer: CollaborationAnalyzer?
+
+    init(posts: [Post], creators: [String: Creator], targetNiches: [String]) {
+        self.posts = posts
+        self.creators = creators
+        self.targetNiches = targetNiches
+
+        let engagement = EngagementAnalyzer(posts: posts, creators: creators)
+        self.engagementAnalyzer = engagement
+
+        var trend = TrendAnalyzer(posts: posts)
+        trend.engagementAnalyzer = engagement
+        self.trendAnalyzer = trend
+
+        self.patternAnalyzer = ContentPatternAnalyzer(posts: posts)
+        self.whitespaceAnalyzer = WhitespaceAnalyzer(posts: posts, creators: creators)
+        self.qualityAnalyzer = EngagementQualityAnalyzer(posts: posts)
+        self.collabAnalyzer = targetNiches.isEmpty ? nil : CollaborationAnalyzer(creators: creators, targetNiches: targetNiches)
     }
 
     // MARK: - Executive Summary
