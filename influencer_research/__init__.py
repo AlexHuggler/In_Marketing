@@ -13,6 +13,7 @@ from .analytics import EngagementAnalyzer, TrendAnalyzer, WhitespaceAnalyzer
 from .data_loader import DataLoader
 from .reporting import ReportGenerator
 from .niche_discovery import NicheDiscovery
+from .notifications import NotificationEvaluator
 
 __all__ = [
     "Post",
@@ -25,4 +26,5 @@ __all__ = [
     "DataLoader",
     "ReportGenerator",
     "NicheDiscovery",
+    "NotificationEvaluator",
 ]

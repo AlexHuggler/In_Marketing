@@ -40,9 +40,14 @@ class ResearchViewModel: ObservableObject {
     // Available niches from dataset (for autocomplete)
     @Published var availableNiches: [String] = []
 
+    // Notifications
+    @Published var activeNotifications: [NotificationItem] = []
+    @Published var unreadNotificationCount: Int = 0
+
     // MARK: - Private
 
     private let dataLoader = DataLoader()
+    private let notificationService = NotificationService()
     private var currentTask: Task<Void, Never>?
     private var reportTask: Task<Void, Never>?
     private let favoritesKey = "com.inmarketing.favoriteCreatorIds"
@@ -208,6 +213,28 @@ class ResearchViewModel: ObservableObject {
                 self.nicheRankings = nicheRanked
                 self.risingStars = stars
             }
+
+            // Evaluate high-value moment notifications
+            guard !Task.isCancelled else { return }
+            let favIds = await self?.favoritedCreatorIds ?? []
+            let notifs = await self?.notificationService.evaluateReportResults(
+                posts: postsCopy,
+                creators: creatorsCopy,
+                creatorRankings: rankings,
+                whitespaceOpportunities: whitespace,
+                trendingReport: trending,
+                executiveSummary: summary,
+                favoritedCreatorIds: favIds,
+                risingStars: stars
+            )
+            await MainActor.run {
+                guard let self else { return }
+                if let newNotifs = notifs, !newNotifs.isEmpty {
+                    self.activeNotifications = newNotifs
+                    self.unreadNotificationCount = newNotifs.count
+                    Haptics.success()
+                }
+            }
         }
 
         reportTask = task
@@ -330,5 +357,23 @@ class ResearchViewModel: ObservableObject {
 
     var averageEngagementRate: Double {
         executiveSummary?.overview.averageEngagementRate ?? 0
+    }
+
+    // MARK: - Notifications
+
+    func trackTabVisit(_ tabName: String) {
+        Task {
+            await notificationService.trackTabVisit(tabName)
+        }
+    }
+
+    func markNotificationRead(_ id: String) {
+        Task {
+            await notificationService.markAsRead(id)
+            let unread = await notificationService.getUnreadNotifications()
+            await MainActor.run {
+                unreadNotificationCount = unread.count
+            }
+        }
     }
 }
