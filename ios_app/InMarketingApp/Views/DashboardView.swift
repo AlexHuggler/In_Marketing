@@ -6,31 +6,59 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 20) {
-                    // Overview Cards
+                VStack(spacing: DS.Spacing.xl) {
                     if let summary = viewModel.executiveSummary {
                         overviewSection(summary.overview)
+                            .staggeredAppear(index: 0)
                         topCreatorsSection(summary.topCreators)
+                            .staggeredAppear(index: 1)
                         fastestGrowingSection(summary.fastestGrowing)
+                            .staggeredAppear(index: 2)
                         topHashtagsSection(summary.topHashtags)
+                            .staggeredAppear(index: 3)
                         trendingSection(summary.trendingTopics)
+                            .staggeredAppear(index: 4)
                         winningFormulasSection(summary.winningFormulas)
+                            .staggeredAppear(index: 5)
                         whitespaceSection(summary.whitespaceOpportunities)
+                            .staggeredAppear(index: 6)
                         recommendationsSection(summary.recommendations)
+                            .staggeredAppear(index: 7)
+                    } else if viewModel.isLoading {
+                        VStack(spacing: DS.Spacing.md) {
+                            ProgressView()
+                                .controlSize(.large)
+                            Text("Analyzing posts and creators...")
+                                .font(DS.Typo.body)
+                                .foregroundStyle(DS.Colors.secondaryText)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 120)
                     } else {
-                        ProgressView("Generating analysis...")
+                        EmptyStateView(
+                            icon: "chart.bar.xaxis",
+                            message: "No analysis available yet.\nLoad data to get started.",
+                            actionLabel: "Load Sample Data",
+                            action: { viewModel.loadSampleData() }
+                        )
                     }
                 }
-                .padding()
+                .padding(DS.Spacing.lg)
+            }
+            .refreshable {
+                Haptics.tap()
+                viewModel.generateAllReports()
             }
             .navigationTitle("Executive Summary")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        Haptics.tap()
                         viewModel.loadSampleData()
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
+                    .accessibilityLabel("Refresh data")
                 }
             }
         }
@@ -39,14 +67,14 @@ struct DashboardView: View {
     // MARK: - Overview
 
     private func overviewSection(_ overview: OverviewMetrics) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             SectionHeader(title: "Overview", icon: "chart.bar.fill")
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                MetricCard(title: "Posts Analyzed", value: "\(overview.totalPostsAnalyzed)", icon: "doc.text.fill", color: .blue)
-                MetricCard(title: "Creators Tracked", value: "\(overview.totalCreatorsTracked)", icon: "person.3.fill", color: .purple)
-                MetricCard(title: "Avg Engagement", value: String(format: "%.2f%%", overview.averageEngagementRate), icon: "heart.fill", color: .pink)
-                MetricCard(title: "Top Engagement", value: String(format: "%.2f%%", overview.topEngagementRate), icon: "star.fill", color: .orange)
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DS.Spacing.md) {
+                MetricCard(title: "Posts Analyzed", value: "\(overview.totalPostsAnalyzed)", icon: "doc.text.fill", color: DS.Colors.accent)
+                MetricCard(title: "Creators Tracked", value: "\(overview.totalCreatorsTracked)", icon: "person.3.fill", color: DS.Colors.info)
+                MetricCard(title: "Avg Engagement", value: String(format: "%.2f%%", overview.averageEngagementRate), icon: "heart.fill", color: DS.Colors.engagementPink)
+                MetricCard(title: "Top Engagement", value: String(format: "%.2f%%", overview.topEngagementRate), icon: "star.fill", color: DS.Colors.trendOrange)
             }
         }
     }
@@ -54,28 +82,28 @@ struct DashboardView: View {
     // MARK: - Top Creators
 
     private func topCreatorsSection(_ creators: [CreatorRankingItem]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             SectionHeader(title: "Top Creators by Engagement", icon: "person.crop.circle.badge.checkmark")
 
             ForEach(Array(creators.prefix(5).enumerated()), id: \.element.id) { index, creator in
-                HStack(spacing: 12) {
+                HStack(spacing: DS.Spacing.md) {
                     Text("\(index + 1)")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
+                        .font(DS.Typo.sectionTitle)
+                        .foregroundStyle(DS.Colors.secondaryText)
                         .frame(width: 24)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(creator.displayName)
-                            .font(.headline)
-                        HStack(spacing: 8) {
+                            .font(DS.Typo.cardTitle)
+                        HStack(spacing: DS.Spacing.sm) {
                             Label(creator.platform.displayName, systemImage: creator.platform.iconName)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(DS.Typo.caption)
+                                .foregroundStyle(DS.Colors.secondaryText)
                             Text(creator.tier)
-                                .font(.caption)
+                                .font(DS.Typo.badge)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color(.systemGray5))
+                                .background(DS.Colors.surfaceBackground)
                                 .clipShape(Capsule())
                         }
                     }
@@ -84,18 +112,16 @@ struct DashboardView: View {
 
                     VStack(alignment: .trailing, spacing: 2) {
                         Text(String(format: "%.1f%%", creator.avgEngagementRate))
-                            .font(.headline)
-                            .foregroundStyle(.blue)
+                            .font(DS.Typo.sectionTitle)
+                            .foregroundStyle(DS.Colors.accent)
                         Text(formatNumber(creator.followerCount) + " followers")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(DS.Typo.caption)
+                            .foregroundStyle(DS.Colors.secondaryText)
                     }
                 }
-                .padding(.vertical, 6)
+                .padding(.vertical, DS.Spacing.sm)
 
-                if index < creators.count - 1 {
-                    Divider()
-                }
+                if index < min(creators.count, 5) - 1 { Divider() }
             }
         }
         .cardStyle()
@@ -104,17 +130,21 @@ struct DashboardView: View {
     // MARK: - Fastest Growing
 
     private func fastestGrowingSection(_ items: [GrowthItem]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             SectionHeader(title: "Fastest Growing", icon: "arrow.up.right.circle.fill")
 
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 HStack {
                     Text("\(index + 1). \(item.name)")
-                        .font(.subheadline)
+                        .font(DS.Typo.body)
                     Spacer()
-                    Text(String(format: "%.1f%%", item.growthRate) + " growth")
-                        .font(.subheadline)
-                        .foregroundStyle(item.growthRate >= 0 ? .green : .red)
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: item.growthRate >= 0 ? "arrow.up.right" : "arrow.down.right")
+                            .font(.caption2)
+                        Text(String(format: "%.1f%%", item.growthRate))
+                    }
+                    .font(DS.Typo.body)
+                    .foregroundStyle(item.growthRate >= 0 ? DS.Colors.success : DS.Colors.danger)
                 }
             }
         }
@@ -124,21 +154,21 @@ struct DashboardView: View {
     // MARK: - Top Hashtags
 
     private func topHashtagsSection(_ items: [HashtagItem]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             SectionHeader(title: "Top Hashtags", icon: "number")
 
             ForEach(items) { item in
                 HStack {
                     Text(item.hashtag)
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.blue)
+                        .font(DS.Typo.bodyBold)
+                        .foregroundStyle(DS.Colors.accent)
                     Spacer()
                     Text("\(Int(item.avgEngagement)) avg eng")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(DS.Typo.caption)
+                        .foregroundStyle(DS.Colors.secondaryText)
                     Text("(\(item.postCount) posts)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(DS.Typo.caption)
+                        .foregroundStyle(DS.Colors.tertiaryText)
                 }
             }
         }
@@ -148,20 +178,20 @@ struct DashboardView: View {
     // MARK: - Trending
 
     private func trendingSection(_ items: [TrendItem]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             SectionHeader(title: "Trending Topics", icon: "flame.fill")
 
             ForEach(items) { item in
                 HStack {
                     Text(item.topic)
-                        .font(.subheadline)
+                        .font(DS.Typo.body)
                     Spacer()
                     Text(String(format: "%.0f%%", item.growthRate) + " growth")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                        .font(DS.Typo.caption)
+                        .foregroundStyle(DS.Colors.trendOrange)
                     Text("(\(item.postCount) posts)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(DS.Typo.caption)
+                        .foregroundStyle(DS.Colors.secondaryText)
                 }
             }
         }
@@ -171,18 +201,18 @@ struct DashboardView: View {
     // MARK: - Winning Formulas
 
     private func winningFormulasSection(_ items: [FormulaItem]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             SectionHeader(title: "Winning Content Formulas", icon: "trophy.fill")
 
             ForEach(items) { item in
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                     Text(item.formula)
-                        .font(.subheadline.bold())
+                        .font(DS.Typo.bodyBold)
                     Text(String(format: "%.0f%% success rate | %.0f avg engagement", item.successRate, item.avgEngagement))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(DS.Typo.caption)
+                        .foregroundStyle(DS.Colors.secondaryText)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, DS.Spacing.xs)
             }
         }
         .cardStyle()
@@ -191,17 +221,17 @@ struct DashboardView: View {
     // MARK: - Whitespace
 
     private func whitespaceSection(_ items: [WhitespaceItem]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             SectionHeader(title: "Whitespace Opportunities", icon: "sparkles")
 
             ForEach(items) { item in
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.topic.capitalized)
-                            .font(.subheadline.bold())
+                            .font(DS.Typo.bodyBold)
                         Text("\(item.creatorCount) creators | Score: \(String(format: "%.0f", item.opportunityScore))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(DS.Typo.caption)
+                            .foregroundStyle(DS.Colors.secondaryText)
                     }
                     Spacer()
                     PriorityBadge(priority: item.priority)
@@ -214,99 +244,19 @@ struct DashboardView: View {
     // MARK: - Recommendations
 
     private func recommendationsSection(_ recs: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
             SectionHeader(title: "Key Recommendations", icon: "lightbulb.fill")
 
             ForEach(Array(recs.enumerated()), id: \.offset) { index, rec in
-                HStack(alignment: .top, spacing: 8) {
+                HStack(alignment: .top, spacing: DS.Spacing.sm) {
                     Text("\(index + 1).")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.blue)
+                        .font(DS.Typo.bodyBold)
+                        .foregroundStyle(DS.Colors.accent)
                     Text(rec)
-                        .font(.subheadline)
+                        .font(DS.Typo.body)
                 }
             }
         }
         .cardStyle()
-    }
-
-    private func formatNumber(_ n: Int) -> String {
-        if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
-        if n >= 1_000 { return String(format: "%.1fK", Double(n) / 1_000) }
-        return "\(n)"
-    }
-}
-
-// MARK: - Reusable Components
-
-struct SectionHeader: View {
-    let title: String
-    let icon: String
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .foregroundStyle(.blue)
-            Text(title)
-                .font(.headline)
-        }
-    }
-}
-
-struct MetricCard: View {
-    let title: String
-    let value: String
-    let icon: String
-    let color: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(color)
-            Text(value)
-                .font(.title2.bold())
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-}
-
-struct PriorityBadge: View {
-    let priority: String
-
-    var color: Color {
-        switch priority {
-        case "High": return .red
-        case "Medium": return .orange
-        default: return .green
-        }
-    }
-
-    var body: some View {
-        Text(priority)
-            .font(.caption.bold())
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(color.opacity(0.15))
-            .foregroundStyle(color)
-            .clipShape(Capsule())
-    }
-}
-
-// MARK: - Card Style Modifier
-
-extension View {
-    func cardStyle() -> some View {
-        self
-            .padding()
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
     }
 }

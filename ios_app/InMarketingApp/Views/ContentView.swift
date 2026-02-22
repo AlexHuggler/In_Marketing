@@ -7,9 +7,16 @@ struct ContentView: View {
         Group {
             if viewModel.hasData {
                 MainTabView()
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
             } else {
                 WelcomeView()
             }
+        }
+        .animation(DS.Animation.standard, value: viewModel.hasData)
+        .alert("Import Notice", isPresented: $viewModel.showErrorAlert) {
+            Button("OK") { viewModel.showErrorAlert = false }
+        } message: {
+            Text(viewModel.errorMessage)
         }
     }
 }
@@ -20,36 +27,38 @@ struct WelcomeView: View {
     @EnvironmentObject var viewModel: ResearchViewModel
     @State private var showFileImporter = false
     @State private var importType = ""
+    @State private var iconBounce = false
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 32) {
+            VStack(spacing: DS.Spacing.xxl) {
                 Spacer()
 
                 Image(systemName: "chart.bar.doc.horizontal.fill")
                     .font(.system(size: 72))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(DS.Colors.accent)
+                    .symbolEffect(.bounce, value: iconBounce)
+                    .onAppear { iconBounce.toggle() }
 
-                VStack(spacing: 8) {
+                VStack(spacing: DS.Spacing.sm) {
                     Text("Influencer Research")
                         .font(.largeTitle.bold())
                     Text("Content Market Research Tool")
                         .font(.title3)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DS.Colors.secondaryText)
                 }
 
-                VStack(spacing: 12) {
-                    Text("Track engagement metrics, discover trending topics, find top voices by niche, and identify content patterns for actionable marketing decisions.")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                }
+                Text("Track engagement metrics, discover trending topics, find top voices by niche, and identify content patterns for actionable marketing decisions.")
+                    .font(DS.Typo.body)
+                    .foregroundStyle(DS.Colors.secondaryText)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
 
                 Spacer()
 
-                VStack(spacing: 16) {
+                VStack(spacing: DS.Spacing.lg) {
                     Button {
+                        Haptics.tap()
                         viewModel.loadSampleData()
                     } label: {
                         HStack {
@@ -57,13 +66,15 @@ struct WelcomeView: View {
                             Text("Load Sample Data")
                         }
                         .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(.blue)
+                        .padding(DS.Spacing.lg)
+                        .background(DS.Colors.accent)
                         .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
                     }
+                    .disabled(viewModel.isLoading)
 
                     Button {
+                        Haptics.select()
                         importType = "posts"
                         showFileImporter = true
                     } label: {
@@ -72,13 +83,14 @@ struct WelcomeView: View {
                             Text("Import Posts CSV")
                         }
                         .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color(.systemGray5))
+                        .padding(DS.Spacing.lg)
+                        .background(DS.Colors.surfaceBackground)
                         .foregroundStyle(.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
                     }
 
                     Button {
+                        Haptics.select()
                         importType = "creators"
                         showFileImporter = true
                     } label: {
@@ -87,17 +99,24 @@ struct WelcomeView: View {
                             Text("Import Creators CSV")
                         }
                         .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color(.systemGray5))
+                        .padding(DS.Spacing.lg)
+                        .background(DS.Colors.surfaceBackground)
                         .foregroundStyle(.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
                     }
                 }
                 .padding(.horizontal)
 
                 if viewModel.isLoading {
-                    ProgressView("Generating sample data...")
-                        .padding()
+                    VStack(spacing: DS.Spacing.sm) {
+                        ProgressView()
+                            .controlSize(.large)
+                        Text("Generating \(viewModel.sampleSize) creators with posts...")
+                            .font(DS.Typo.caption)
+                            .foregroundStyle(DS.Colors.secondaryText)
+                    }
+                    .padding()
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
                 Spacer()
@@ -125,8 +144,10 @@ struct WelcomeView: View {
                     viewModel.loadCreatorsCSV(content: content)
                 }
             }
-        case .failure:
-            break
+        case .failure(let error):
+            viewModel.errorMessage = "File import failed: \(error.localizedDescription)"
+            viewModel.showErrorAlert = true
+            Haptics.error()
         }
     }
 }
@@ -134,32 +155,32 @@ struct WelcomeView: View {
 // MARK: - Main Tab View
 
 struct MainTabView: View {
+    @State private var selectedTab = 0
+
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             DashboardView()
-                .tabItem {
-                    Label("Dashboard", systemImage: "chart.bar.fill")
-                }
+                .tabItem { Label("Dashboard", systemImage: "chart.bar.fill") }
+                .tag(0)
 
             CreatorRankingsView()
-                .tabItem {
-                    Label("Creators", systemImage: "person.3.fill")
-                }
+                .tabItem { Label("Creators", systemImage: "person.3.fill") }
+                .tag(1)
 
             TrendingView()
-                .tabItem {
-                    Label("Trending", systemImage: "flame.fill")
-                }
+                .tabItem { Label("Trending", systemImage: "flame.fill") }
+                .tag(2)
 
             ContentIdeasView()
-                .tabItem {
-                    Label("Ideas", systemImage: "lightbulb.fill")
-                }
+                .tabItem { Label("Ideas", systemImage: "lightbulb.fill") }
+                .tag(3)
 
             DiscoveryView()
-                .tabItem {
-                    Label("Discover", systemImage: "magnifyingglass")
-                }
+                .tabItem { Label("Discover", systemImage: "magnifyingglass") }
+                .tag(4)
+        }
+        .onChange(of: selectedTab) { _, _ in
+            Haptics.select()
         }
     }
 }
