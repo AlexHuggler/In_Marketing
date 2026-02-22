@@ -163,7 +163,8 @@ struct NicheDiscovery {
             let engagementScore = min(creator.avgEngagementRate * 15.0, 100.0)
             let growthScore = min(max(creator.followerGrowthRate30d, 0) * 3.0, 100.0)
             let matchedNiches = countNicheMatches(creator: creator, targetNiches: niches, includeRelated: includeRelated)
-            let relevanceScore = min(Double(matchedNiches) * 25.0, 100.0)
+            let maxMatches = max(niches.count, 1)
+            let relevanceScore = min((Double(matchedNiches) / Double(maxMatches)) * 100.0, 100.0)
 
             let creatorPosts = posts.filter { $0.creatorId == creator.id }
             let consistency: Double

@@ -13,7 +13,8 @@ struct TrendingView: View {
                     Text("Best Times").tag(2)
                 }
                 .pickerStyle(.segmented)
-                .padding()
+                .padding(DS.Spacing.lg)
+                .onChange(of: selectedTab) { _, _ in Haptics.select() }
 
                 ScrollView {
                     switch selectedTab {
@@ -23,6 +24,10 @@ struct TrendingView: View {
                     default: EmptyView()
                     }
                 }
+                .refreshable {
+                    Haptics.tap()
+                    viewModel.generateAllReports()
+                }
             }
             .navigationTitle("Trends & Timing")
         }
@@ -31,111 +36,117 @@ struct TrendingView: View {
     // MARK: - Trending Topics
 
     private var trendingTopicsSection: some View {
-        VStack(spacing: 12) {
-            if let report = viewModel.trendingReport {
+        VStack(spacing: DS.Spacing.md) {
+            if let report = viewModel.trendingReport, !report.trendingNow.isEmpty {
                 ForEach(Array(report.trendingNow.enumerated()), id: \.element.id) { index, item in
-                    HStack(spacing: 12) {
+                    HStack(spacing: DS.Spacing.md) {
                         Text("\(index + 1)")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
+                            .font(DS.Typo.sectionTitle)
+                            .foregroundStyle(DS.Colors.secondaryText)
                             .frame(width: 28)
 
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                             Text(item.topic)
-                                .font(.headline)
+                                .font(DS.Typo.cardTitle)
                             Text("\(item.postCount) posts | \(Int(item.avgEngagement)) avg engagement")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(DS.Typo.caption)
+                                .foregroundStyle(DS.Colors.secondaryText)
                         }
 
                         Spacer()
 
-                        VStack(alignment: .trailing) {
-                            HStack(spacing: 2) {
-                                Image(systemName: item.growthRate >= 0 ? "arrow.up.right" : "arrow.down.right")
-                                Text(String(format: "%.0f%%", item.growthRate))
-                            }
-                            .font(.subheadline.bold())
-                            .foregroundStyle(item.growthRate >= 0 ? .green : .red)
+                        HStack(spacing: 2) {
+                            Image(systemName: item.growthRate >= 0 ? "arrow.up.right" : "arrow.down.right")
+                            Text(String(format: "%.0f%%", item.growthRate))
                         }
+                        .font(DS.Typo.bodyBold)
+                        .foregroundStyle(item.growthRate >= 0 ? DS.Colors.success : DS.Colors.danger)
                     }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(DS.Spacing.lg)
+                    .background(DS.Colors.surfaceBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm + 2))
+                    .staggeredAppear(index: index)
                 }
             } else {
-                Text("No trending data available")
-                    .foregroundStyle(.secondary)
+                EmptyStateView(
+                    icon: "flame",
+                    message: "No trending data available.\nImport posts to see what's trending.",
+                    actionLabel: "Refresh",
+                    action: { viewModel.generateAllReports() }
+                )
             }
         }
-        .padding()
+        .padding(DS.Spacing.lg)
     }
 
     // MARK: - Hashtags
 
     private var hashtagsSection: some View {
-        VStack(spacing: 12) {
-            if let report = viewModel.trendingReport {
+        VStack(spacing: DS.Spacing.md) {
+            if let report = viewModel.trendingReport, !report.topHashtags.isEmpty {
                 ForEach(Array(report.topHashtags.enumerated()), id: \.element.id) { index, item in
-                    HStack(spacing: 12) {
+                    HStack(spacing: DS.Spacing.md) {
                         Text("\(index + 1)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(DS.Typo.caption)
+                            .foregroundStyle(DS.Colors.secondaryText)
                             .frame(width: 24)
 
                         Text(item.hashtag)
-                            .font(.headline)
-                            .foregroundStyle(.blue)
+                            .font(DS.Typo.cardTitle)
+                            .foregroundStyle(DS.Colors.accent)
 
                         Spacer()
 
                         VStack(alignment: .trailing, spacing: 2) {
                             Text(String(format: "%.0f avg eng", item.avgEngagement))
-                                .font(.subheadline.bold())
+                                .font(DS.Typo.bodyBold)
                             Text("\(item.postCount) posts")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(DS.Typo.caption)
+                                .foregroundStyle(DS.Colors.secondaryText)
                         }
                     }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(DS.Spacing.lg)
+                    .background(DS.Colors.surfaceBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm + 2))
+                    .staggeredAppear(index: index)
                 }
+            } else {
+                EmptyStateView(icon: "number", message: "No hashtag data available")
             }
         }
-        .padding()
+        .padding(DS.Spacing.lg)
     }
 
     // MARK: - Best Times
 
     private var bestTimesSection: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: DS.Spacing.xl) {
             if let report = viewModel.trendingReport {
                 // Best Days
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
                     SectionHeader(title: "Best Days to Post", icon: "calendar")
 
                     ForEach(report.bestPostingTimes.bestDays) { day in
                         HStack {
                             Text(day.label)
-                                .font(.subheadline)
+                                .font(DS.Typo.body)
                                 .frame(width: 100, alignment: .leading)
 
                             GeometryReader { geo in
                                 let maxEng = report.bestPostingTimes.bestDays.map(\.avgEngagement).max() ?? 1
                                 ZStack(alignment: .leading) {
                                     RoundedRectangle(cornerRadius: 4)
-                                        .fill(Color(.systemGray5))
+                                        .fill(DS.Colors.surfaceBackground)
                                     RoundedRectangle(cornerRadius: 4)
-                                        .fill(Color.blue)
+                                        .fill(DS.Colors.accent)
                                         .frame(width: geo.size.width * (day.avgEngagement / maxEng))
                                 }
                             }
                             .frame(height: 20)
 
                             Text(String(format: "%.0f", day.avgEngagement))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(DS.Typo.caption)
+                                .foregroundStyle(DS.Colors.secondaryText)
                                 .frame(width: 50, alignment: .trailing)
                         }
                     }
@@ -143,37 +154,39 @@ struct TrendingView: View {
                 .cardStyle()
 
                 // Best Hours
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
                     SectionHeader(title: "Best Hours to Post", icon: "clock.fill")
 
                     ForEach(report.bestPostingTimes.bestHours.prefix(10)) { hour in
                         HStack {
                             Text(hour.label)
-                                .font(.subheadline)
+                                .font(DS.Typo.body)
                                 .frame(width: 60, alignment: .leading)
 
                             GeometryReader { geo in
                                 let maxEng = report.bestPostingTimes.bestHours.map(\.avgEngagement).max() ?? 1
                                 ZStack(alignment: .leading) {
                                     RoundedRectangle(cornerRadius: 4)
-                                        .fill(Color(.systemGray5))
+                                        .fill(DS.Colors.surfaceBackground)
                                     RoundedRectangle(cornerRadius: 4)
-                                        .fill(Color.orange)
+                                        .fill(DS.Colors.trendOrange)
                                         .frame(width: geo.size.width * (hour.avgEngagement / maxEng))
                                 }
                             }
                             .frame(height: 20)
 
                             Text(String(format: "%.0f", hour.avgEngagement))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(DS.Typo.caption)
+                                .foregroundStyle(DS.Colors.secondaryText)
                                 .frame(width: 50, alignment: .trailing)
                         }
                     }
                 }
                 .cardStyle()
+            } else {
+                EmptyStateView(icon: "clock", message: "No timing data available")
             }
         }
-        .padding()
+        .padding(DS.Spacing.lg)
     }
 }
