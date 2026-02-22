@@ -16,5 +16,10 @@ let package = Package(
             name: "InMarketingApp",
             path: "InMarketingApp"
         ),
+        .testTarget(
+            name: "InMarketingAppTests",
+            dependencies: ["InMarketingApp"],
+            path: "Tests"
+        ),
     ]
 )
